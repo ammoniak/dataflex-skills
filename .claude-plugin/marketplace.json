@@ -1,0 +1,14 @@
+{
+  "name": "dataflex-skills",
+  "owner": {
+    "name": "Raphael Theiler"
+  },
+  "plugins": [
+    {
+      "name": "df-compile",
+      "source": "./plugins/df-compile",
+      "description": "Compile a DataFlex program with the console compiler (DfCompConsole.exe).",
+      "version": "0.1.0"
+    }
+  ]
+}
