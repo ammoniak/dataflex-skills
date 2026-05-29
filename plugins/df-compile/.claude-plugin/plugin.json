@@ -1,7 +1,7 @@
 {
   "name": "df-compile",
   "description": "Compile a DataFlex program with the console compiler (DfCompConsole.exe).",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": {
     "name": "Raphael Theiler"
   }

@@ -39,6 +39,40 @@ missing-package or ordering problem.
 - Warnings are summarised as `Total Warnings : <n>`; pre-existing ones unrelated to
   your change can be ignored.
 
+## Compiling while the app is running (locked binary)
+
+If the program is running (e.g. open in the Studio, or a live web-app process pool),
+the linker can't overwrite the `.exe` and you get:
+
+```
+LINK ERROR: UNABLE TO OPEN FILE ...\<name>.exe
+Total Errors   : 1
+```
+
+This is **not** a code error — the source compiled fine (0 source `ERROR: ... ON LINE`
+lines); only the final link step failed on the locked file. To get a full clean build
+(including link) **without stopping the running app**, compile a throwaway copy of the
+`.src` so the linker writes a differently-named `.exe`:
+
+```powershell
+$ws   = "<workspace>.sws"
+$src  = "AppSrc\<program>.src"
+$tmp  = "AppSrc\zz_buildcheck.src"
+Copy-Item $src $tmp -Force
+$compiler = "C:\Program Files\DataFlex 25.0\Bin64\DfCompConsole.exe"
+& $compiler -x"$ws" -c "$tmp" 2>&1 | Select-String -Pattern "ERROR:|Total Errors|Total Warnings"
+Write-Output "EXIT=$LASTEXITCODE"
+# clean up the throwaway artifacts (src + build outputs)
+Remove-Item $tmp -Force -ErrorAction SilentlyContinue
+Remove-Item "Programs\zz_buildcheck.exe","Programs\zz_buildcheck.dbg","AppSrc\zz_buildcheck.x64.dep","AppSrc\zz_buildcheck.x64.prn" -Force -ErrorAction SilentlyContinue
+```
+
+The output name derives from the `.src` filename, so the copy produces
+`zz_buildcheck.exe` (not locked) and links cleanly — giving a true `Total Errors : 0`.
+Always delete the `zz_buildcheck.*` files (`.src`, `.exe`, `.dbg`, `.x64.dep`, `.x64.prn`)
+afterwards. Alternatively, just close the program in the Studio / stop the process and
+compile the real `.src` normally.
+
 ## Output
 
 The executable lands in the workspace's `ProgramPath` (commonly `...\Programs\<name>.exe`).
