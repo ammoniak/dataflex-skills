@@ -19,14 +19,37 @@ newest version that matches the workspace.
 
 ## Command
 
-Run from the repo / workspace root. `-x` = workspace (`.sws`), `-c` = source to
-compile (path relative to the workspace's AppSrc).
+The two arguments use **different path bases** — this is the easy mistake to make:
+
+- **`-x<workspace>.sws`** — the workspace file. Resolved against your **current working
+  directory** (or pass an absolute path). No space after `-x`.
+- **`-c <program>.src`** — the program source. Resolved against the **workspace's Home
+  directory** (the folder that contains the `.sws`), **not** your current directory.
+  Since `AppSrcPath` is normally `.\AppSrc`, this is almost always `AppSrc\<program>.src`
+  — with **no** workspace-folder prefix.
 
 ```powershell
 $compiler = "C:\Program Files\DataFlex 25.0\Bin64\DfCompConsole.exe"
 & $compiler -x"<workspace>.sws" -c "AppSrc\<program>.src" 2>&1 | Select-String -Pattern "ERROR:|Total Errors|Total Warnings"
 Write-Output "EXIT=$LASTEXITCODE"
 ```
+
+### Watch out: compiling a workspace that lives in a subfolder
+
+Say the repo root `C:\repo` holds several workspaces and you want to build
+`C:\repo\coreM\AppSrc\WebApp.src` in workspace `C:\repo\coreM\coreM.sws`, while staying
+at `C:\repo`:
+
+```powershell
+& $compiler -x"coreM\coreM.sws" -c "AppSrc\WebApp.src"   # ✅ -c is relative to coreM\
+```
+
+- ❌ `-c "coreM\AppSrc\WebApp.src"` is **wrong**: the compiler prepends the workspace
+  folder and ends up looking for `coreM\coreM\AppSrc\WebApp.src` → *file not found*.
+- `-x` keeps the `coreM\` prefix (it's relative to your current dir); `-c` does not
+  (it's relative to the workspace's Home). The mismatch is the whole gotcha.
+- The trap only bites when your current dir ≠ the workspace folder. If you `cd` into
+  `coreM\` first, both args lose the prefix and `-c "AppSrc\WebApp.src"` still works.
 
 The compiler log is verbose; filtering on `ERROR:|Total Errors|Total Warnings`
 keeps it readable. Drop the filter to see the full include trace when diagnosing a
@@ -54,17 +77,20 @@ lines); only the final link step failed on the locked file. To get a full clean 
 (including link) **without stopping the running app**, compile a throwaway copy of the
 `.src` so the linker writes a differently-named `.exe`:
 
+Mind the two path bases here too: `Copy-Item` / `Remove-Item` touch the filesystem so
+they take **current-dir-relative** paths (here prefixed with `$wsDir`), while `-c` stays
+**workspace-relative** (`AppSrc\...`, no prefix). They only look the same when you run
+from inside the workspace folder.
+
 ```powershell
-$ws   = "<workspace>.sws"
-$src  = "AppSrc\<program>.src"
-$tmp  = "AppSrc\zz_buildcheck.src"
-Copy-Item $src $tmp -Force
+$wsDir = "coreM"                  # folder that holds the .sws (current-dir-relative)
+$ws    = "$wsDir\coreM.sws"
 $compiler = "C:\Program Files\DataFlex 25.0\Bin64\DfCompConsole.exe"
-& $compiler -x"$ws" -c "$tmp" 2>&1 | Select-String -Pattern "ERROR:|Total Errors|Total Warnings"
+Copy-Item "$wsDir\AppSrc\WebApp.src" "$wsDir\AppSrc\zz_buildcheck.src" -Force
+& $compiler -x"$ws" -c "AppSrc\zz_buildcheck.src" 2>&1 | Select-String -Pattern "ERROR:|Total Errors|Total Warnings"
 Write-Output "EXIT=$LASTEXITCODE"
-# clean up the throwaway artifacts (src + build outputs)
-Remove-Item $tmp -Force -ErrorAction SilentlyContinue
-Remove-Item "Programs\zz_buildcheck.exe","Programs\zz_buildcheck.dbg","AppSrc\zz_buildcheck.x64.dep","AppSrc\zz_buildcheck.x64.prn" -Force -ErrorAction SilentlyContinue
+# clean up the throwaway artifacts (filesystem paths, so $wsDir-prefixed like the copy)
+Remove-Item "$wsDir\AppSrc\zz_buildcheck.src","$wsDir\Programs\zz_buildcheck.exe","$wsDir\Programs\zz_buildcheck.dbg","$wsDir\AppSrc\zz_buildcheck.x64.dep","$wsDir\AppSrc\zz_buildcheck.x64.prn" -Force -ErrorAction SilentlyContinue
 ```
 
 The output name derives from the `.src` filename, so the copy produces
